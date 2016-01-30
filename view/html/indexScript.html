@@ -1,0 +1,171 @@
+<script type="text/javascript">
+var numberOfCalls = 0;
+var dddJson = null;
+var dddOptions = null;
+var planJson = null;
+var planOptions = null;
+var defaultTrCode = null;
+var callIdReplacement = "__CALL_ID__";
+var lastDuration = null;
+
+jQuery(document).ready(function() {
+	var mainHtml = $("#site > .main").html();
+	$("#site > .main").html("Loading calculator...");
+	
+	loadJsonDDD();
+	loadJsonPlan();
+	buildDefaultTrCode();
+	
+	$("#site > .main").hide();
+	$("#site > .main").html(mainHtml);
+	resetCalls();
+	$("#site > .main").fadeIn();
+});
+
+function buildDefaultTrCode() {	
+	defaultTrCode = "<tr id='tr_"+callIdReplacement+"'>";
+	defaultTrCode += "<td><select call-id="+callIdReplacement+" name='from_ddd' id='from_ddd_"+callIdReplacement+"'>"+dddOptions+"</select></td>";
+	defaultTrCode += "<td><select call-id="+callIdReplacement+" name='to_ddd' id='to_ddd_"+callIdReplacement+"'>"+dddOptions+"</select></td>";
+	defaultTrCode += "<td><input call-id="+callIdReplacement+" style='width: 50px;' name='duration' id='duration_"+callIdReplacement+"' /></td>";
+	defaultTrCode += "<td><select call-id="+callIdReplacement+" name='plan' id='plan_"+callIdReplacement+"'>"+planOptions+"</select></td>";
+	defaultTrCode += "<td id='plan_price_"+callIdReplacement+"'>--</td>";
+	defaultTrCode += "<td id='normal_price_"+callIdReplacement+"'>--</td>";
+	defaultTrCode += "</tr>";
+}
+
+function loadJsonDDD() {
+	$.ajax( {
+		type :"POST",
+		url :"../process/loadJsonDDD.php",
+		async: false,
+		beforeSend : function() {
+		},
+		success : function(txt) {
+			dddJson = JSON.parse(txt);
+			dddOptions = "<option selected value=''>--</option>";
+			for (i=0; i< dddJson.length; i++) {
+				item = dddJson[i];
+				dddOptions += "<option value='"+item.ddd+"'>"+item.ddd+"</option>";
+			}
+		},
+		error : function(txt) {
+			alert("Got errors loading DDD list. Please, try again later.");
+		}
+	});	
+}
+
+function loadJsonPlan() {
+	$.ajax( {
+		type :"POST",
+		url :"../process/loadJsonPlan.php",
+		async: false,
+		beforeSend : function() {
+		},
+		success : function(txt) {
+			planJson = JSON.parse(txt);
+			planOptions = "<option selected value=''>--</option>";
+			for (i=0; i< planJson.length; i++) {
+				item = planJson[i];
+				planOptions += "<option value='"+item.plan_id+"'>"+item.description+"</option>";
+			}
+		},
+		error : function(txt) {
+			alert("Got errors loading plan list. Please, try again later.");
+		}
+	});		
+}
+
+function addCall() {
+	
+	trCode = defaultTrCode.replace(/__CALL_ID__/g, numberOfCalls);
+		
+	$("#tbl-calls").append(trCode);
+	
+	bindEvents();
+
+	numberOfCalls++;
+}
+
+function bindEvents(){
+	
+	// add class zebra
+	if (numberOfCalls%2!=0){
+		$("#tr_"+numberOfCalls).addClass("zebra");
+	}
+	
+	// begin from_ddd bind
+	elName = "#from_ddd_" + numberOfCalls;
+	$(elName).change(function() {
+		calculate($(this).attr("call-id"));
+	});	
+	// end from_ddd bind
+
+	// begin to_ddd bind
+	elName = "#to_ddd_" + numberOfCalls;
+	$(elName).change(function() {
+		calculate($(this).attr("call-id"));
+	});	
+	// end to_ddd bind
+	
+	// begin duration bind
+	elName = "#duration_" + numberOfCalls;
+	$(elName).numeric();
+	$(elName).focus(function() {
+		lastDuration = $(this).val();
+	});	
+	$(elName).blur(function() {
+		if (lastDuration != $(this).val()) {
+			calculate($(this).attr("call-id"));			
+		}
+	});	
+	// end duration bind
+	
+	// begin plan bind
+	elName = "#plan_" + numberOfCalls;
+	$(elName).change(function() {
+		calculate($(this).attr("call-id"));
+	});	
+	// end plan bind	
+}
+
+function calculate(callId) {
+	fromDDD = $("#from_ddd_" + callId + " option:selected").val();
+	toDDD = $("#to_ddd_" + callId + " option:selected").val();
+	duration = $("#duration_" + callId).val();
+	plan = $("#plan_" + callId + " option:selected").val();
+	
+	if (fromDDD != "" && toDDD != "" && duration != "" && plan != "") {
+		$.ajax( {
+			type :"POST",
+			url :"../process/calculate.php",
+			data : "from_ddd="+fromDDD+"&to_ddd="+toDDD+"&duration="+duration+"&plan="+plan,
+			beforeSend : function() {
+				$("#normal_price_"+callId).html("Calculating...");
+				$("#plan_price_"+callId).html("Calculating...");
+			},
+			success : function(txt) {
+				price = JSON.parse(txt);
+				$("#normal_price_"+callId).html(price.normal);
+				$("#plan_price_"+callId).html(price.plan);
+			},
+			error : function(txt) {
+				alert("Got errors during calculation. Please, try again later.");
+				$("#normal_price_"+callId).html("Got errors during calculation.");
+				$("#plan_price_"+callId).html("Got errors during calculation.");
+			}
+		});		
+		
+	} else {
+		$("#normal_price_"+callId).html("--");
+		$("#plan_price_"+callId).html("--");		
+	}
+	
+}
+
+function resetCalls() {
+	$("#tbl-calls > tbody").html("");
+	numberOfCalls = 0;
+	addCall();
+}
+
+</script>
